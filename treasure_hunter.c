@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <dirent.h>
+#include <errno.h>
 
 void make_treasure(){
 
@@ -69,7 +70,7 @@ int filter(const struct dirent *name)
 
 void list(char *game){
   write(1, game, strlen(game));
-  putchar('\n');
+  write(1, "\n", 1);
   struct stat st;
   lstat(game, &st);
   char buff[100];
@@ -174,8 +175,10 @@ int main(int argc, char **argv){
   strcat(name, argv[2]+strlen(argv[2])-1);
   strcat(name, ".txt");
   if(symlink(path, name) != 0){
-    perror("symlink() error");
-    unlink(name);
+    if(errno != EEXIST){
+      perror("symlink() error");
+      unlink(name);
+    }
   }
   
   return 0;
