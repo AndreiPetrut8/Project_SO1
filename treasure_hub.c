@@ -81,64 +81,62 @@ void list_treasures(){
   write(1, "Introduceti nume hunt:", strlen("Introduceti nume hunt:"));
   read(1, buff, sizeof(buff));
   buff[strlen(buff)-1] = '\0';
-  struct dirent **namelist;
-  int n = scandir(buff, &namelist, filter, alphasort);
-  if (n == -1) {
-    perror("scandir");
-    exit(EXIT_FAILURE);
+  pid_t x;
+  if((x = fork()) < 0){
+    perror(NULL);
+    exit(-1);
   }
-  while(n--){
-    if(strncmp(namelist[n]->d_name, "treasure", strlen("treasure")) == 0){
-      write(1, namelist[n]->d_name, strlen(namelist[n]->d_name));
-      write(1, " Size:", strlen(" Size:"));
-      memset(buff, 0, sizeof(buff));
-      sprintf(buff, "%d", namelist[n]->d_reclen);
-      write(1, buff, strlen(buff));
-      write(1, " Type:", strlen(" Type:"));
-      memset(buff, 0, sizeof(buff));
-      if(namelist[n]->d_type == DT_REG)strcpy(buff, "regular file\n");
-      else if(namelist[n]->d_type == DT_DIR)strcpy(buff, "directory\n");
-      write(1, buff, strlen(buff));
-      
-    }
+  if(x == 0){
+    execl("/usr/bin/gcc", "/usr/bin/gcc", "-Wall", "-o", "bin2", "treasure_hunter.c", NULL);
+    printf("eroare\n");
   }
-  memset(buff, 0, sizeof(buff));
+  wait(NULL);
+  if((x = fork()) < 0){
+    perror(NULL);
+    exit(-1);
+  }
+  if(x == 0){
+    execl("./bin2", "./bin2", "list", buff,  NULL);
+    printf("eroare\n");
+   }
+  wait(NULL);
+  
   
 }
 
 void view_treasure(){
 
-  char buff[100];
+  char buff[100], buff1[100];
   write(1, "Introduceti nume hunt:", strlen("Introduceti nume hunt:"));
   read(1, buff, sizeof(buff));
   buff[strlen(buff)-1] = '\0';
-  struct dirent **namelist;
-  int n = scandir(buff, &namelist, filter, alphasort);
-  if (n == -1) {
-    perror("scandir");
-    exit(EXIT_FAILURE);
-  }
+  
   write(1, "Introduceti nume treasure:", strlen("Introduceti nume treasure:"));
-  memset(buff, 0, sizeof(buff));
-  read(1, buff, sizeof(buff));
-  buff[strlen(buff)-1] = '\0';
-  while(n--){
-    if(strncmp(namelist[n]->d_name, buff, strlen(buff)) == 0){
-      write(1, namelist[n]->d_name, strlen(namelist[n]->d_name));
-      write(1, " Size:", strlen(" Size:"));
-      memset(buff, 0, sizeof(buff));
-      sprintf(buff, "%d", namelist[n]->d_reclen);
-      write(1, buff, strlen(buff));
-      write(1, " Type:", strlen(" Type:"));
-      memset(buff, 0, sizeof(buff));
-      if(namelist[n]->d_type == DT_REG)strcpy(buff, "regular file\n");
-      else if(namelist[n]->d_type == DT_DIR)strcpy(buff, "directory\n");
-      write(1, buff, strlen(buff));
-      
-    }
+  memset(buff1, 0, sizeof(buff));
+  read(1, buff1, sizeof(buff));
+  buff1[strlen(buff1)-1] = '\0';
+
+  pid_t x;
+  if((x = fork()) < 0){
+    perror(NULL);
+    exit(-1);
   }
-  memset(buff, 0, sizeof(buff));
-}
+  if(x == 0){
+    execl("/usr/bin/gcc", "/usr/bin/gcc", "-Wall", "-o", "bin2", "treasure_hunter.c", NULL);
+    printf("eroare\n");
+  }
+  wait(NULL);
+  if((x = fork()) < 0){
+    perror(NULL);
+    exit(-1);
+  }
+  if(x == 0){
+    execl("./bin2", "./bin2", "view", buff, buff1,  NULL);
+    printf("eroare\n");
+   }
+  wait(NULL);
+  
+  }
 
 void send_signal(int sig){
   if(monitor_pid == -1){
