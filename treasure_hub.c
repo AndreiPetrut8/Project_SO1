@@ -10,41 +10,20 @@
 #include <sys/wait.h>
 
 pid_t monitor_pid = -1;
+volatile sig_atomic_t done = 0;
 
 int filter(const struct dirent *name)
 {
   return 1;
 }
 
-void start_monitor(){
-  if(monitor_pid != -1){
-    write(1, "Monitorul merge deja\n", strlen("Monitorul merge deja\n"));
-    return;
-  }
-  if((monitor_pid = fork()) < 0){
-    perror(NULL);
-    exit(-1);
-  }
-  
-
-  if(monitor_pid == 0){
-
-    write(1, "Monitorul porneste\n", strlen("Monitorul porneste\n"));
-    struct sigaction s;
-    s.sa_handler = SIG_IGN;
-    s.sa_flags = 0;
-    sigaction(SIGUSR1, &s, NULL);
-    sigaction(SIGUSR2, &s, NULL);
-    sigaction(SIGINT, &s, NULL);
-    sigaction(SIGTERM, &s, NULL);
-
-    while(1){
-      pause();
-    }
-  }
+void handler_done(){
+  done = 1;
 }
 
+
 void list_hunts(){
+
   
   struct dirent **namelist;
   int n = scandir(".", &namelist, filter, alphasort);
@@ -72,6 +51,8 @@ void list_hunts(){
       write(1, number, x);
     }
   }
+
+  kill(getppid(), SIGTERM);
  
   
 }
@@ -79,7 +60,7 @@ void list_hunts(){
 void list_treasures(){
   char buff[100];
   write(1, "Introduceti nume hunt:", strlen("Introduceti nume hunt:"));
-  read(1, buff, sizeof(buff));
+  read(0, buff, sizeof(buff));
   buff[strlen(buff)-1] = '\0';
   pid_t x;
   if((x = fork()) < 0){
@@ -100,7 +81,7 @@ void list_treasures(){
     printf("eroare\n");
    }
   wait(NULL);
-  
+  kill(getppid(), SIGTERM);
   
 }
 
@@ -108,12 +89,12 @@ void view_treasure(){
 
   char buff[100], buff1[100];
   write(1, "Introduceti nume hunt:", strlen("Introduceti nume hunt:"));
-  read(1, buff, sizeof(buff));
+  read(0, buff, sizeof(buff));
   buff[strlen(buff)-1] = '\0';
   
   write(1, "Introduceti nume treasure:", strlen("Introduceti nume treasure:"));
   memset(buff1, 0, sizeof(buff));
-  read(1, buff1, sizeof(buff));
+  read(0, buff1, sizeof(buff));
   buff1[strlen(buff1)-1] = '\0';
 
   pid_t x;
@@ -125,7 +106,7 @@ void view_treasure(){
     execl("/usr/bin/gcc", "/usr/bin/gcc", "-Wall", "-o", "bin2", "treasure_hunter.c", NULL);
     printf("eroare\n");
   }
-  wait(NULL);
+  wait(&x);
   if((x = fork()) < 0){
     perror(NULL);
     exit(-1);
@@ -134,8 +115,8 @@ void view_treasure(){
     execl("./bin2", "./bin2", "view", buff, buff1,  NULL);
     printf("eroare\n");
    }
-  wait(NULL);
-  
+  wait(&x);
+  kill(getppid(), SIGTERM);
   }
 
 void send_signal(int sig){
@@ -144,7 +125,8 @@ void send_signal(int sig){
     return;
   }
 
-  switch(sig){
+  kill(monitor_pid, sig);
+  /*switch(sig){
   case SIGUSR1:{
     list_hunts();
     break;
@@ -157,8 +139,39 @@ void send_signal(int sig){
     view_treasure();
     break;
   }
+  }*/
+  
+}
+
+void start_monitor(){
+  if(monitor_pid != -1){
+    write(1, "Monitorul merge deja\n", strlen("Monitorul merge deja\n"));
+    return;
+  }
+  if((monitor_pid = fork()) < 0){
+    perror(NULL);
+    exit(-1);
   }
   
+
+  if(monitor_pid == 0){
+
+    write(1, "Monitorul porneste\n", strlen("Monitorul porneste\n"));
+    struct sigaction s;
+    s.sa_handler = list_hunts;
+    s.sa_flags = 0;
+    sigaction(SIGUSR1, &s, NULL);
+    s.sa_handler = list_treasures;
+    sigaction(SIGUSR2, &s, NULL);
+    s.sa_handler = view_treasure;
+    sigaction(SIGINT, &s, NULL);
+    s.sa_handler = SIG_DFL;
+    sigaction(SIGTERM, &s, NULL);
+
+    while(1){
+      pause();
+    }
+  }
 }
 
 void stop_monitor(){
@@ -176,6 +189,13 @@ void stop_monitor(){
 
 int main(void){
 
+
+  struct sigaction s_done;
+  s_done.sa_handler = handler_done;
+  s_done.sa_flags = 0;
+  sigemptyset(&s_done.sa_mask);
+  sigaction(SIGTERM, &s_done, NULL);
+  
   char buff[100];
 
   while(read(0, buff, sizeof(buff))){
@@ -183,13 +203,19 @@ int main(void){
       start_monitor();
     }	
     else if(strncmp(buff, "list_hunts", strlen("list_hunts")) == 0){
+      done = 0;
       send_signal(SIGUSR1);
+      while(!done)pause();
     }
     else if(strncmp(buff, "list_treasures", strlen("list_treasures")) == 0){
+      done = 0;
       send_signal(SIGUSR2);
+      while(!done)pause();
     }
     else if(strncmp(buff, "view_treasure", strlen("view_treasure")) == 0){
+      done = 0;
       send_signal(SIGINT);
+      while(!done)pause();
     }
     else if(strncmp(buff, "stop_monitor", strlen("stop_monitor")) == 0){
       stop_monitor();
