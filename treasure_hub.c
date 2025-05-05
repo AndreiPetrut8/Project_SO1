@@ -21,6 +21,12 @@ void handler_done(){
   done = 1;
 }
 
+void handle_sigchld(int sig)
+{
+    while (waitpid(-1, NULL, WNOHANG) > 0);
+    write(1, "Monitorul s-a terminat\n", 
+          strlen("Monitorul s-a terminat\n"));
+}
 
 void list_hunts(){
 
@@ -165,7 +171,7 @@ void start_monitor(){
     sigaction(SIGUSR2, &s, NULL);
     s.sa_handler = view_treasure;
     sigaction(SIGINT, &s, NULL);
-    s.sa_handler = SIG_DFL;
+    s.sa_handler = handle_sigchld;
     sigaction(SIGTERM, &s, NULL);
 
     while(1){
@@ -184,7 +190,7 @@ void stop_monitor(){
   write(1, "Monitorul se opreste\n", strlen("Monitorul se opreste\n"));
   kill(monitor_pid, SIGTERM);
   monitor_pid = -1;
-  usleep(1000000);
+  usleep(5000000);
 }
 
 int main(void){
