@@ -11,6 +11,9 @@
 
 pid_t monitor_pid = -1;
 volatile sig_atomic_t done = 0;
+int pipefd[2];
+int saved_stdout;
+
 
 int filter(const struct dirent *name)
 {
@@ -37,9 +40,13 @@ void list_hunts(){
     perror("scandir");
     exit(EXIT_FAILURE);
   }
+  
+  
   while(n--){
+    
     if(strncmp(namelist[n]->d_name, "game", strlen("game")) == 0){
-      write(1, namelist[n]->d_name, strlen(namelist[n]->d_name));
+      
+      write(pipefd[1], namelist[n]->d_name, strlen(namelist[n]->d_name));
       struct dirent **namelist2;
       int m = scandir( namelist[n]->d_name, &namelist2, filter, alphasort);
       if (m == -1) {
@@ -48,22 +55,25 @@ void list_hunts(){
       }
       int count = 0;
       while(m--){
-	if(strncmp(namelist2[n]->d_name, "treasure", strlen("treasure")) == 0){
+	
+	if(strncmp(namelist2[m]->d_name, "treasure", strlen("treasure")) == 0){
 	  count++;
+	  
 	}
       }
       char number[20];
       int x = sprintf(number, " %d treasures\n", count);
-      write(1, number, x);
+      write(pipefd[1], number, x);
     }
   }
-
+  
   kill(getppid(), SIGTERM);
  
   
 }
 
 void list_treasures(){
+  
   char buff[100];
   write(1, "Introduceti nume hunt:", strlen("Introduceti nume hunt:"));
   read(0, buff, sizeof(buff));
@@ -78,21 +88,26 @@ void list_treasures(){
     printf("eroare\n");
   }
   wait(NULL);
+  
   if((x = fork()) < 0){
     perror(NULL);
     exit(-1);
   }
   if(x == 0){
+    close(pipefd[0]);
+    dup2(pipefd[1], 1);
+    close(pipefd[1]);
     execl("./bin2", "./bin2", "list", buff,  NULL);
     printf("eroare\n");
    }
   wait(NULL);
+  
   kill(getppid(), SIGTERM);
   
 }
 
 void view_treasure(){
-
+  
   char buff[100], buff1[100];
   write(1, "Introduceti nume hunt:", strlen("Introduceti nume hunt:"));
   read(0, buff, sizeof(buff));
@@ -113,17 +128,52 @@ void view_treasure(){
     printf("eroare\n");
   }
   wait(&x);
+  
+  if((x = fork()) < 0){
+    perror(NULL);
+    exit(-1);
+  }
+  printf("1");
+  if(x == 0){
+    close(pipefd[0]);
+    dup2(pipefd[1], 1);
+    close(pipefd[1]);
+    execl("./bin2", "./bin2", "view", buff, buff1,  NULL);
+    printf("eroare\n");
+   }
+  wait(&x);
+  
+  kill(getppid(), SIGTERM);
+  }
+
+void calculate_score(){
+  
+  pid_t x;
   if((x = fork()) < 0){
     perror(NULL);
     exit(-1);
   }
   if(x == 0){
-    execl("./bin2", "./bin2", "view", buff, buff1,  NULL);
+    execl("/usr/bin/gcc", "/usr/bin/gcc", "-Wall", "-o", "bin3", "calculate_score.c", NULL);
+    printf("eroare\n");
+  }
+  wait(&x);
+  
+  if((x = fork()) < 0){
+    perror(NULL);
+    exit(-1);
+  }
+  if(x == 0){
+    close(pipefd[0]);
+    dup2(pipefd[1], 1);
+    close(pipefd[1]);
+    execl("./bin3", "./bin3",  NULL);
     printf("eroare\n");
    }
   wait(&x);
+
   kill(getppid(), SIGTERM);
-  }
+}
 
 void send_signal(int sig){
   if(monitor_pid == -1){
@@ -161,7 +211,7 @@ void start_monitor(){
   
 
   if(monitor_pid == 0){
-
+    saved_stdout = dup(1);
     write(1, "Monitorul porneste\n", strlen("Monitorul porneste\n"));
     struct sigaction s;
     s.sa_handler = list_hunts;
@@ -173,6 +223,8 @@ void start_monitor(){
     sigaction(SIGINT, &s, NULL);
     s.sa_handler = handle_sigchld;
     sigaction(SIGTERM, &s, NULL);
+    s.sa_handler = calculate_score;
+    sigaction(SIGILL, &s, NULL);
 
     while(1){
       pause();
@@ -195,7 +247,13 @@ void stop_monitor(){
 
 int main(void){
 
+  if(pipe(pipefd) == -1){
 
+    perror(NULL);
+    exit(-1);
+  }
+  char pipe_reader[4096];
+  
   struct sigaction s_done;
   s_done.sa_handler = handler_done;
   s_done.sa_flags = 0;
@@ -212,16 +270,33 @@ int main(void){
       done = 0;
       send_signal(SIGUSR1);
       while(!done)pause();
+      read(pipefd[0], pipe_reader, sizeof(pipe_reader));
+      write(1, pipe_reader, strlen(pipe_reader));
+      memset(pipe_reader, 0, sizeof(pipe_reader));
     }
     else if(strncmp(buff, "list_treasures", strlen("list_treasures")) == 0){
       done = 0;
       send_signal(SIGUSR2);
       while(!done)pause();
+      read(pipefd[0], pipe_reader, sizeof(pipe_reader));
+      write(1, pipe_reader, strlen(pipe_reader));
+      memset(pipe_reader, 0, sizeof(pipe_reader));
     }
     else if(strncmp(buff, "view_treasure", strlen("view_treasure")) == 0){
       done = 0;
       send_signal(SIGINT);
       while(!done)pause();
+      read(pipefd[0], pipe_reader, sizeof(pipe_reader));
+      write(1, pipe_reader, strlen(pipe_reader));
+      memset(pipe_reader, 0, sizeof(pipe_reader));
+    }
+    else if(strncmp(buff, "calculate_score", strlen("calculate_score")) == 0){
+      done = 0;
+      send_signal(SIGILL);
+      while(!done)pause();
+      read(pipefd[0], pipe_reader, sizeof(pipe_reader));
+      write(1, pipe_reader, strlen(pipe_reader));
+      memset(pipe_reader, 0, sizeof(pipe_reader));
     }
     else if(strncmp(buff, "stop_monitor", strlen("stop_monitor")) == 0){
       stop_monitor();

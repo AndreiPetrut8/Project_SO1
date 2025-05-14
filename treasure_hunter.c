@@ -179,7 +179,7 @@ int main(int argc, char **argv){
       perror("symlink() error");
       unlink(name);
     }
-    else if(argv[1][0] == 'r')unlink(name);
+    else if(argv[1][0] == 'r' && argc != 4)unlink(name);
   }
   
   return 0;
